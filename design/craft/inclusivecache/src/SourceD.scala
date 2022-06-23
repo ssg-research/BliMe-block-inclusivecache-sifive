@@ -202,12 +202,16 @@ class SourceD(params: InclusiveCacheParameters) extends Module
 
   // Collect s3's data from either the BankedStore or bypass
   // NOTE: we use the s3_bypass passed down from s1_bypass, because s2-s4 were guarded by the hazard checks and not stale
-  val s3_bypass_data = Wire(UInt())
-  def chunk(x: UInt): Seq[UInt] = Seq.tabulate(beatBytes/writeBytes) { i => x((i+1)*writeBytes*8-1, i*writeBytes*8) }
+  val s3_bypass_data = Wire(BlindedMem(UInt(),UInt()))
+  def chunk_bits(x: UInt): Seq[UInt] = Seq.tabulate(beatBytes/writeBytes) { i => x((i+1)*writeBytes*8-1, i*writeBytes*8) }
+  def chunk_blindmask(x: UInt): Seq[UInt] = Seq.tabulate(beatBytes/writeBytes) { i => x((i+1)*writeBytes-1, i*writeBytes) }
   def chop (x: UInt): Seq[Bool] = Seq.tabulate(beatBytes/writeBytes) { i => x(i) }
-  def bypass(sel: UInt, x: UInt, y: UInt) =
-    (chop(sel) zip (chunk(x) zip chunk(y))) .map { case (s, (x, y)) => Mux(s, x, y) } .asUInt
-  val s3_rdata = bypass(s3_bypass, s3_bypass_data, queue.io.deq.bits.data)
+  def bypass_bits(sel: UInt, x: UInt, y: UInt) =
+    (chop(sel) zip (chunk_bits(x) zip chunk_bits(y))) .map { case (s, (x, y)) => Mux(s, x, y) } .asUInt
+  def bypass_blindmask(sel: UInt, x: UInt, y: UInt) =
+    (chop(sel) zip (chunk_blindmask(x) zip chunk_blindmask(y))) .map { case (s, (x, y)) => Mux(s, x, y) } .asUInt
+  val s3_rdata_bits = bypass_bits(s3_bypass, s3_bypass_data.bits, queue.io.deq.bits.data.bits)
+  val s3_rdata_blindmask = bypass_blindmask(s3_bypass, s3_bypass_data.blindmask, queue.io.deq.bits.data.blindmask)
 
   // Lookup table for response codes
   val grant = Mux(s3_req.param === BtoT, Grant, GrantData)
@@ -224,7 +228,7 @@ class SourceD(params: InclusiveCacheParameters) extends Module
   d.bits.source  := s3_req.source
   d.bits.sink    := s3_req.sink
   d.bits.denied  := s3_req.bad
-  d.bits.data    := s3_rdata
+  d.bits.data    := Cat(s3_rdata_blindmask, s3_rdata_bits)
   d.bits.corrupt := s3_req.bad && d.bits.opcode(0)
 
   queue.io.deq.ready := s3_valid && s4_ready && s3_need_r
@@ -252,7 +256,10 @@ class SourceD(params: InclusiveCacheParameters) extends Module
   val s4_req = RegEnable(s3_req, s4_latch)
   val s4_adjusted_opcode = RegEnable(s3_adjusted_opcode, s4_latch)
   val s4_pdata = RegEnable(s3_pdata, s4_latch)
-  val s4_rdata = RegEnable(s3_rdata, s4_latch)
+  // val s3_rdata_wire = Wire(BlindedMem(UInt(),UInt()))
+  // s3_rdata_wire.bits := s3_rdata_bits
+  // s3_rdata_wire.blindmask := s3_rdata_blindmask
+  val s4_rdata = RegEnable(Cat(s3_rdata_blindmask, s3_rdata_bits), s4_latch)
 
   val atomics = Module(new Atomics(params.inner.bundle))
   atomics.io.write     := s4_req.prio(2)
@@ -271,7 +278,8 @@ class SourceD(params: InclusiveCacheParameters) extends Module
   io.bs_wadr.bits.set  := s4_req.set
   io.bs_wadr.bits.beat := s4_beat
   io.bs_wadr.bits.mask := Cat(s4_pdata.mask.asBools.grouped(writeBytes).map(_.reduce(_||_)).toList.reverse)
-  io.bs_wdat.data := atomics.io.data_out
+  io.bs_wdat.data.bits := atomics.io.data_out(params.inner.bundle.dataBits - 1, 0)
+  io.bs_wdat.data.blindmask := atomics.io.data_out(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits)
   assert (!(s4_full && s4_need_pb && s4_pdata.corrupt), "Data poisoning unsupported")
 
   params.ccover(io.bs_wadr.valid && !io.bs_wadr.ready, "SOURCED_4_WRITEBACK_STALL", "Data writeback stalled")
@@ -331,11 +339,16 @@ class SourceD(params: InclusiveCacheParameters) extends Module
   val pre_s3_5_bypass = Mux(pre_s3_5_match, MaskGen(pre_s5_req.offset, pre_s5_req.size, beatBytes, writeBytes), UInt(0))
   val pre_s3_6_bypass = Mux(pre_s3_6_match, MaskGen(pre_s6_req.offset, pre_s6_req.size, beatBytes, writeBytes), UInt(0))
 
-  s3_bypass_data :=
-    bypass(RegNext(pre_s3_4_bypass), atomics.io.data_out, RegNext(
-    bypass(pre_s3_5_bypass, pre_s5_dat,
-    bypass(pre_s3_6_bypass, pre_s6_dat,
-                            pre_s7_dat))))
+  s3_bypass_data.bits := 
+    bypass_bits(RegNext(pre_s3_4_bypass), atomics.io.data_out(params.inner.bundle.dataBits - 1, 0), RegNext(
+    bypass_bits(pre_s3_5_bypass, pre_s5_dat(params.inner.bundle.dataBits - 1, 0),
+    bypass_bits(pre_s3_6_bypass, pre_s6_dat(params.inner.bundle.dataBits - 1, 0),
+                                 pre_s7_dat(params.inner.bundle.dataBits - 1, 0)))))
+  s3_bypass_data.blindmask :=
+    bypass_blindmask(RegNext(pre_s3_4_bypass), atomics.io.data_out(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits), RegNext(
+    bypass_blindmask(pre_s3_5_bypass, pre_s5_dat(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits),
+    bypass_blindmask(pre_s3_6_bypass, pre_s6_dat(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits),
+                                      pre_s7_dat(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits)))))
 
   // Detect which parts of s1 will be bypassed from later pipeline stages (s1-s4)
   // Note: we also bypass from reads ahead in the pipeline to save power

@@ -89,7 +89,8 @@ class SinkC(params: InclusiveCacheParameters) extends Module
     //   ... this makes it easier to layout the L2 data banks far away
     val bs_adr = Wire(io.bs_adr)
     io.bs_adr <> Queue(bs_adr, 1, pipe=true)
-    io.bs_dat.data   := RegEnable(c.bits.data,    bs_adr.fire())
+    io.bs_dat.data.bits   := RegEnable(c.bits.data(params.inner.bundle.dataBits - 1, 0),    bs_adr.fire())
+    io.bs_dat.data.blindmask   := RegEnable(c.bits.data(params.inner.bundle.dataBits + params.inner.bundle.dataBits/8 - 1, params.inner.bundle.dataBits),    bs_adr.fire())
     bs_adr.valid     := resp && (!first || (c.valid && hasData))
     bs_adr.bits.noop := !c.valid
     bs_adr.bits.way  := io.way

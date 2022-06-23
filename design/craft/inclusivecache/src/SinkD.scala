@@ -76,7 +76,8 @@ class SinkD(params: InclusiveCacheParameters) extends Module
   io.bs_adr.bits.set  := io.set
   io.bs_adr.bits.beat := Mux(d.valid, beat, RegEnable(beat + io.bs_adr.ready.asUInt, d.valid))
   io.bs_adr.bits.mask := ~UInt(0, width = params.outerMaskBits)
-  io.bs_dat.data      := d.bits.data
+  io.bs_dat.data.bits      := d.bits.data(params.outer.bundle.dataBits - 1, 0)
+  io.bs_dat.data.blindmask      := d.bits.data(params.outer.bundle.dataBits + params.outer.bundle.dataBits/8 - 1, params.outer.bundle.dataBits)
 
   assert (!(d.valid && d.bits.corrupt && !d.bits.denied), "Data poisoning unsupported")
 }

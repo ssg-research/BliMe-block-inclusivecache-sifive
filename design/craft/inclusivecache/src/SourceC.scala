@@ -108,7 +108,7 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   c.bits.size    := UInt(params.offsetBits)
   c.bits.source  := s3_req.source
   c.bits.address := params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
-  c.bits.data    := io.bs_dat.data
+  c.bits.data    := Cat(io.bs_dat.data.blindmask, io.bs_dat.data.bits)
   c.bits.corrupt := Bool(false)
 
   // We never accept at the front-end unless we're sure things will fit

@@ -21,7 +21,7 @@ import Chisel._
 import freechips.rocketchip.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.DescribedSRAM
+import freechips.rocketchip.util.{DescribedSRAM, BlindedMem}
 
 import scala.math.{max, min}
 
@@ -45,7 +45,8 @@ class BankedStoreInnerAddressRW(params: InclusiveCacheParameters) extends Banked
 
 abstract class BankedStoreData(val inner: Boolean, params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = (if (inner) params.inner.manager.beatBytes else params.outer.manager.beatBytes)*8)
+  val data = BlindedMem(UInt(width = (if (inner) params.inner.manager.beatBytes else params.outer.manager.beatBytes)*8), 
+                        UInt(width = (if (inner) params.inner.manager.beatBytes else params.outer.manager.beatBytes)))
 }
 
 class BankedStoreOuterData(params: InclusiveCacheParameters) extends BankedStoreData(false, params)
@@ -85,7 +86,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
         name = s"cc_banks_$i",
         desc = "Banked Store",
         size = rowEntries,
-        data = UInt(width = codeBits)
+        data = BlindedMem(UInt(width = codeBits), UInt(width = codeBits/8))
       )
   }
   // These constraints apply on the port priorities:
@@ -111,16 +112,20 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
     val bankSel  = UInt(width = numBanks)
     val bankSum  = UInt(width = numBanks) // OR of all higher priority bankSels
     val bankEn   = UInt(width = numBanks) // ports actually activated by request
-    val data     = Vec(numBanks, UInt(width = codeBits))
+    val data     = Vec(numBanks, BlindedMem(UInt(width = codeBits), UInt(width = codeBits/8)))
   }
 
-  def req[T <: BankedStoreAddress](b: DecoupledIO[T], write: Bool, d: UInt): Request = {
+  def req[T <: BankedStoreAddress](b: DecoupledIO[T], write: Bool, d: BlindedMem[UInt,UInt]): Request = {
     val beatBytes = if (b.bits.inner) innerBytes else outerBytes
     val ports = beatBytes / params.micro.writeBytes
     val bankBits = log2Ceil(numBanks / ports)
     val words = Seq.tabulate(ports) { i =>
-      val data = d((i + 1) * 8 * params.micro.writeBytes - 1, i * 8 * params.micro.writeBytes)
+      val data = d.bits((i + 1) * 8 * params.micro.writeBytes - 1, i * 8 * params.micro.writeBytes)
       data
+    }
+    val blindmasks = Seq.tabulate(ports) { i =>
+      val masks = d.blindmask((i + 1) * params.micro.writeBytes - 1, i * params.micro.writeBytes)
+      masks
     }
     val a = Cat(b.bits.way, b.bits.set, b.bits.beat)
     val m = b.bits.mask
@@ -134,13 +139,22 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
     out.index    := a >> bankBits
     out.bankSel  := Mux(b.valid, FillInterleaved(ports, select) & Fill(numBanks/ports, m), UInt(0))
     out.bankEn   := Mux(b.bits.noop, UInt(0), out.bankSel & FillInterleaved(ports, ready))
-    out.data     := Vec(Seq.fill(numBanks/ports) { words }.flatten)
+    Vec(Seq.fill(numBanks/ports) { words }.flatten).zipWithIndex.map { case (w,i) => 
+      out.data(i).bits := w
+    }
+    Vec(Seq.fill(numBanks/ports) { blindmasks }.flatten).zipWithIndex.map { case (b,i) => 
+      out.data(i).blindmask := b
+    }
 
     out
   }
 
-  val innerData = UInt(0, width = innerBytes*8)
-  val outerData = UInt(0, width = outerBytes*8)
+  val innerData = Wire(BlindedMem(UInt(width = innerBytes*8), UInt(width = innerBytes)))
+  val outerData = Wire(BlindedMem(UInt(width = outerBytes*8), UInt(width = outerBytes)))
+  innerData.bits := 0.U
+  innerData.blindmask := 0.U
+  outerData.bits := 0.U
+  outerData.blindmask := 0.U
   val W = Bool(true)
   val R = Bool(false)
 
@@ -174,18 +188,29 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   val regsel_sourceC = RegNext(RegNext(sourceC_req.bankEn))
   val regsel_sourceD = RegNext(RegNext(sourceD_rreq.bankEn))
 
-  val decodeC = regout.zipWithIndex.map {
-    case (r, i) => Mux(regsel_sourceC(i), r, UInt(0))
+  val decodeC_bits = regout.zipWithIndex.map {
+    case (r, i) => Mux(regsel_sourceC(i), r.bits, UInt(0))
   }.grouped(outerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
-  io.sourceC_dat.data := Cat(decodeC.reverse)
+  val decodeC_blindmask = regout.zipWithIndex.map {
+    case (r, i) => Mux(regsel_sourceC(i), r.blindmask, UInt(0))
+  }.grouped(outerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
-  val decodeD = regout.zipWithIndex.map {
+  io.sourceC_dat.data.bits := Cat(decodeC_bits.reverse)
+  io.sourceC_dat.data.blindmask := Cat(decodeC_blindmask.reverse)
+
+  val decodeD_bits = regout.zipWithIndex.map {
     // Intentionally not Mux1H and/or an indexed-mux b/c we want it 0 when !sel to save decode power
-    case (r, i) => Mux(regsel_sourceD(i), r, UInt(0))
+    case (r, i) => Mux(regsel_sourceD(i), r.bits, UInt(0))
   }.grouped(innerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
-  io.sourceD_rdat.data := Cat(decodeD.reverse)
+  val decodeD_blindmask = regout.zipWithIndex.map {
+    // Intentionally not Mux1H and/or an indexed-mux b/c we want it 0 when !sel to save decode power
+    case (r, i) => Mux(regsel_sourceD(i), r.blindmask, UInt(0))
+  }.grouped(innerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
+
+  io.sourceD_rdat.data.bits := Cat(decodeD_bits.reverse)
+  io.sourceD_rdat.data.blindmask := Cat(decodeD_blindmask.reverse)
 
   private def banks = cc_banks.map("\"" + _._1.pathName + "\"").mkString(",")
   def json: String = s"""{"widthBytes":${params.micro.writeBytes},"mem":[${banks}]}"""
