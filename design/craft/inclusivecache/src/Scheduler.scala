@@ -307,6 +307,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module
             abc_mshrs.map(_.io.status.bits.way)))
   sinkD.io.way := Vec(mshrs.map(_.io.status.bits.way))(sinkD.io.source)
   sinkD.io.set := Vec(mshrs.map(_.io.status.bits.set))(sinkD.io.source)
+  sinkD.io.blindmask_phase := Vec(mshrs.map(_.io.status.bits.blindmask_phase))(sinkD.io.source)
 
   // Beat buffer connections between components
   sinkA.io.pb_pop <> sourceD.io.pb_pop

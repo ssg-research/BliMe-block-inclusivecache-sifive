@@ -35,10 +35,11 @@ class SinkD(params: InclusiveCacheParameters) extends Module
   val io = new Bundle {
     val resp = Valid(new SinkDResponse(params)) // Grant or ReleaseAck
     val d = Decoupled(new TLBundleD(params.outer.bundle)).flip
-    // Lookup the set+way from MSHRs
+    // Lookup the set+way from MSHRs (include blindmask_phase in this!)
     val source = UInt(width = params.outer.bundle.sourceBits)
     val way    = UInt(width = params.wayBits).flip
     val set    = UInt(width = params.setBits).flip
+    val blindmask_phase = Bool().flip
     // Banked Store port
     val bs_adr = Decoupled(new BankedStoreOuterAddress(params))
     val bs_dat = new BankedStoreOuterPoison(params)
@@ -74,10 +75,10 @@ class SinkD(params: InclusiveCacheParameters) extends Module
   io.bs_adr.bits.noop := !d.valid || !hasData
   io.bs_adr.bits.way  := io.way
   io.bs_adr.bits.set  := io.set
+  io.bs_adr.bits.blindmask_phase  := io.blindmask_phase
   io.bs_adr.bits.beat := Mux(d.valid, beat, RegEnable(beat + io.bs_adr.ready.asUInt, d.valid))
   io.bs_adr.bits.mask := ~UInt(0, width = params.outerMaskBits)
-  io.bs_dat.data.bits      := d.bits.data(params.outer.bundle.dataBits - 1, 0)
-  io.bs_dat.data.blindmask      := d.bits.data(params.outer.bundle.dataBits + params.outer.bundle.dataBits/8 - 1, params.outer.bundle.dataBits)
+  io.bs_dat.data      := d.bits.data(params.outer.bundle.dataBits - 1, 0)
 
   assert (!(d.valid && d.bits.corrupt && !d.bits.denied), "Data poisoning unsupported")
 }

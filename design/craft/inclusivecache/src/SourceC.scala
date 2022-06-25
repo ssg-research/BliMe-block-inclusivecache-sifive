@@ -29,6 +29,7 @@ class SourceCRequest(params: InclusiveCacheParameters) extends InclusiveCacheBun
   val set    = UInt(width = params.setBits)
   val way    = UInt(width = params.wayBits)
   val dirty  = Bool()
+  val blindmask_phase = Bool()
 }
 
 class SourceC(params: InclusiveCacheParameters) extends Module
@@ -105,10 +106,10 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   c.valid        := s3_valid
   c.bits.opcode  := s3_req.opcode
   c.bits.param   := s3_req.param
-  c.bits.size    := UInt(params.offsetBits)
+  c.bits.size    := Mux(s3_req.blindmask_phase, UInt(params.offsetBits-3), UInt(params.offsetBits))
   c.bits.source  := s3_req.source
-  c.bits.address := params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
-  c.bits.data    := Cat(io.bs_dat.data.blindmask, io.bs_dat.data.bits)
+  c.bits.address := Mux(s3_req.blindmask_phase, params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0)), params.expandAddress(s3_req.tag, s3_req.set, UInt(0)))
+  c.bits.data    := io.bs_dat.data
   c.bits.corrupt := Bool(false)
 
   // We never accept at the front-end unless we're sure things will fit

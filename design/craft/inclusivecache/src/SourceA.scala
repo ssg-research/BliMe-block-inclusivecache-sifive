@@ -27,6 +27,7 @@ class SourceARequest(params: InclusiveCacheParameters) extends InclusiveCacheBun
   val param  = UInt(width = 3)
   val source = UInt(width = params.outer.bundle.sourceBits)
   val block  = Bool()
+  val blindmask_phase = Bool()
 }
 
 class SourceA(params: InclusiveCacheParameters) extends Module
@@ -48,9 +49,9 @@ class SourceA(params: InclusiveCacheParameters) extends Module
 
   a.bits.opcode  := Mux(io.req.bits.block, TLMessages.AcquireBlock, TLMessages.AcquirePerm)
   a.bits.param   := io.req.bits.param
-  a.bits.size    := UInt(params.offsetBits)
+  a.bits.size    := Mux(io.req.bits.blindmask_phase, UInt(params.offsetBits-3), UInt(params.offsetBits))
   a.bits.source  := io.req.bits.source
-  a.bits.address := params.expandAddress(io.req.bits.tag, io.req.bits.set, UInt(0))
+  a.bits.address := Mux(io.req.bits.blindmask_phase, params.expandBlindmaskAddr(io.req.bits.tag, io.req.bits.set, UInt(0)), params.expandAddress(io.req.bits.tag, io.req.bits.set, UInt(0)))
   a.bits.mask    := ~UInt(0, width = params.outer.manager.beatBytes)
   a.bits.data    := UInt(0)
 }

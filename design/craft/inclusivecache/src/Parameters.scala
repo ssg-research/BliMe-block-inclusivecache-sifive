@@ -227,6 +227,14 @@ case class InclusiveCacheParameters(
     Cat(bits.reverse)
   }
 
+  def expandDataAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
+    expandAddress(tag, set, offset) // FIXME
+  }
+
+  def expandBlindmaskAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
+    expandAddress(tag, set, offset) // FIXME
+  }
+
   def restoreAddress(expanded: UInt): UInt = {
     val missingBits = flatAddresses
       .map { a => (a.widen(pickMask).base, a.widen(~pickMask)) } // key is the bits to restore on match

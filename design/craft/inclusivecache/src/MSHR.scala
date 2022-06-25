@@ -34,6 +34,7 @@ class ScheduleRequest(params: InclusiveCacheParameters) extends InclusiveCacheBu
   val x = Valid(new SourceXRequest(params))
   val dir = Valid(new DirectoryWrite(params))
   val reload = Bool() // get next request via allocate (if any)
+  // val blindmask_phase = Bool() // this request is to read or write blindmasks not actual data -> moved to each relevant Source[]Request Bundle
 }
 
 class MSHRStatus(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
@@ -41,6 +42,7 @@ class MSHRStatus(params: InclusiveCacheParameters) extends InclusiveCacheBundle(
   val set = UInt(width = params.setBits)
   val tag = UInt(width = params.tagBits)
   val way = UInt(width = params.wayBits)
+  val blindmask_phase = Bool()
   val blockB = Bool()
   val nestB  = Bool()
   val blockC = Bool()
@@ -114,6 +116,8 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     }
   }
 
+  val blindmask_phase  = RegInit(false.B)
+
   // Completed transitions (s_ = scheduled), (w_ = waiting)
   val s_rprobe         = RegInit(Bool(true)) // B
   val w_rprobeackfirst = RegInit(Bool(true))
@@ -162,6 +166,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.status.bits.set    := request.set
   io.status.bits.tag    := request.tag
   io.status.bits.way    := meta.way
+  io.status.bits.blindmask_phase := blindmask_phase
   io.status.bits.blockB := !meta_valid || ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
   io.status.bits.nestB  := meta_valid && w_releaseack && w_rprobeacklast && w_pprobeacklast && !w_grantfirst
   // The above rules ensure we will block and not nest an outer probe while still doing our
@@ -177,7 +182,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   assert (!io.status.bits.nestC || !io.status.bits.blockC)
 
   // Scheduler requests
-  val no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_pprobeacklast && w_grantack
+  val no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_pprobeacklast && w_grantack && !blindmask_phase
   io.schedule.bits.a.valid := !s_acquire && s_release && s_pprobe
   io.schedule.bits.b.valid := !s_rprobe || !s_pprobe
   io.schedule.bits.c.valid := (!s_release && w_rprobeackfirst) || (!s_probeack && w_pprobeackfirst)
@@ -280,6 +285,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.a.bits.block   := request.size =/= UInt(log2Ceil(params.cache.blockBytes)) ||
                                      !(request.opcode === PutFullData || request.opcode === AcquirePerm)
   io.schedule.bits.a.bits.source  := UInt(0)
+  io.schedule.bits.a.bits.blindmask_phase := blindmask_phase
   io.schedule.bits.b.bits.param   := Mux(!s_rprobe, toN, Mux(request.prio(1), request.param, Mux(req_needT, toN, toB)))
   io.schedule.bits.b.bits.tag     := Mux(!s_rprobe, meta.tag, request.tag)
   io.schedule.bits.b.bits.set     := request.set
@@ -291,6 +297,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.c.bits.set     := request.set
   io.schedule.bits.c.bits.way     := meta.way
   io.schedule.bits.c.bits.dirty   := meta.dirty
+  io.schedule.bits.c.bits.blindmask_phase := blindmask_phase
   io.schedule.bits.d.bits         := request
   io.schedule.bits.d.bits.param   := Mux(!req_acquire, request.param,
                                        MuxLookup(request.param, Wire(request.param), Seq(
