@@ -495,9 +495,19 @@ class MSHR(params: InclusiveCacheParameters) extends Module
       params.ccover(io.sinkd.bits.opcode === GrantData && request.offset === UInt(0), "MSHR_GRANT_WORMHOLE", "Wormhole routing of grant response data")
       params.ccover(io.sinkd.bits.opcode === GrantData && request.offset =/= UInt(0), "MSHR_GRANT_SERIAL", "Sequential routing of grant response data")
       gotT := io.sinkd.bits.param === toT
+      when (io.sinkd.bits.last) {
+        blindmask_phase := ~blindmask_phase
+        // s_acquire := Bool(false)
+        // w_grantfirst := Bool(false)
+        // w_grantlast := Bool(false)
+        // w_grant := Bool(false)
+        // s_grantack := Bool(false)
+        // s_writeback := Bool(false)
+      }
     }
     .elsewhen (io.sinkd.bits.opcode === ReleaseAck) {
       w_releaseack := Bool(true)
+      blindmask_phase := ~blindmask_phase
     }
   }
   when (io.sinke.valid) {
@@ -511,6 +521,9 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   val new_needT = needT(new_request.opcode, new_request.param)
   val new_clientBit = params.clientBit(new_request.source)
   val new_skipProbe = Mux(skipProbeN(new_request.opcode), new_clientBit, UInt(0))
+  val start_blindmask_phase = io.sinkd.valid && !blindmask_phase &&
+                              ( ((io.sinkd.bits.opcode === Grant || io.sinkd.bits.opcode === GrantData) && io.sinkd.bits.last) ||
+                                (io.sinkd.bits.opcode === ReleaseAck) )
 
   val prior = cacheState(final_meta_writeback, Bool(true))
   def bypass(from: CacheState, cover: Boolean)(implicit sourceInfo: SourceInfo) {
@@ -540,7 +553,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   }
 
   // Create execution plan
-  when (io.directory.valid || (io.allocate.valid && io.allocate.bits.repeat)) {
+  when (io.directory.valid || (io.allocate.valid && io.allocate.bits.repeat) || start_blindmask_phase) {
     meta_valid := Bool(true)
     meta := new_meta
     probes_done := UInt(0)

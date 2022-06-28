@@ -106,7 +106,7 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   c.valid        := s3_valid
   c.bits.opcode  := s3_req.opcode
   c.bits.param   := s3_req.param
-  c.bits.size    := Mux(s3_req.blindmask_phase, UInt(params.offsetBits-3), UInt(params.offsetBits))
+  c.bits.size    := Mux(s3_req.blindmask_phase, UInt(params.offsetBits), UInt(params.offsetBits))
   c.bits.source  := s3_req.source
   c.bits.address := Mux(s3_req.blindmask_phase, params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0)), params.expandAddress(s3_req.tag, s3_req.set, UInt(0)))
   c.bits.data    := io.bs_dat.data

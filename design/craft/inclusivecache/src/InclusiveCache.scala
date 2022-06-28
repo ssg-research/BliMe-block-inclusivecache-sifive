@@ -36,7 +36,7 @@ class InclusiveCache(
     extends LazyModule
 {
   val access = TransferSizes(1, cache.blockBytes)
-  val xfer = TransferSizes(cache.blockBytes, cache.blockBytes)
+  val xfer = TransferSizes(cache.blockBytes/8, cache.blockBytes)
   val atom = TransferSizes(1, cache.beatBytes)
 
   var resourcesOpt: Option[ResourceBindings] = None
