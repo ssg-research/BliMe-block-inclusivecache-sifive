@@ -116,9 +116,6 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     }
   }
 
-  // val blockSourceDResp = Wire(Bool())
-  // val blindmask_phase  = RegInit(false.B) // active high (unlike the registers below)
-
   // Completed transitions (s_ = scheduled), (w_ = waiting)
   val s_rprobe         = RegInit(Bool(true)) // B
   val w_rprobeackfirst = RegInit(Bool(true))
@@ -208,20 +205,6 @@ class MSHR(params: InclusiveCacheParameters) extends Module
                        io.schedule.bits.d.valid || io.schedule.bits.e.valid || io.schedule.bits.x.valid ||
                        io.schedule.bits.dir.valid
 
-  // val start_blindmask_request = !s_blindmask && original_no_wait
-  // when (blindmask_phase && original_no_wait) {
-  //   blindmask_phase := false.B
-  // }
-
-
-  // when (toggle_blindmask_phase) {
-  //   blindmask_phase := ~blindmask_phase
-  // }
-
-  // when (start_blindmask_request) {
-  //   blockSourceDResp := false.B
-  // }
-
   // Schedule completions
   when (io.schedule.ready) {
                                     s_rprobe     := Bool(true)
@@ -240,9 +223,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     when (w_pprobeack && 
           w_bmGrant)              { s_execute    := Bool(true);  assert(w_grant)    }
     when (no_wait)                { s_writeback  := Bool(true) }
-    // when (start_blindmask_request)  { // blindmask "req/schedule" has been accepted by Scheduler
-    //                                 s_blindmask     := Bool(true)
-    //                                 blindmask_phase := true.B  } 
+
     // Await the next operation
     when (no_wait) {
       request_valid := Bool(false)
