@@ -194,14 +194,14 @@ class MSHR(params: InclusiveCacheParameters) extends Module
 
   // Scheduler requests
   // val original_no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_pprobeacklast && w_grantack
-  val no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_bmGrantlast && w_pprobeacklast && w_grantack
+  val no_wait = w_rprobeacklast && w_releaseack && w_bmReleaseack && w_grantlast && w_bmGrantlast && w_pprobeacklast && w_grantack
   // val no_wait = original_no_wait && s_blindmask && !blindmask_phase
-  io.schedule.bits.a.valid := (!s_acquire || (!s_bmAcquire && s_grantack)) && s_release && s_bmRelease && s_pprobe
+  io.schedule.bits.a.valid := (!s_acquire || (!s_bmAcquire && w_grantlast)) && s_release && s_bmRelease && s_pprobe
   io.schedule.bits.b.valid := !s_rprobe || !s_pprobe
   io.schedule.bits.c.valid := ((!s_release || (!s_bmRelease && w_releaseack)) && w_rprobeackfirst) || (!s_probeack && w_pprobeackfirst)
   io.schedule.bits.d.valid := !s_execute && w_pprobeack && w_grant && w_bmGrant
   io.schedule.bits.e.valid := (!s_grantack && w_grantfirst) || (!s_bmGrantack && w_bmGrantfirst)
-  io.schedule.bits.x.valid := !s_flush && w_releaseack
+  io.schedule.bits.x.valid := !s_flush && w_releaseack && w_bmReleaseack
   io.schedule.bits.dir.valid := ((!s_release || !s_bmRelease) && w_rprobeackfirst) || (!s_writeback && no_wait)
   io.schedule.bits.reload := no_wait
   io.schedule.valid := io.schedule.bits.a.valid || io.schedule.bits.b.valid || io.schedule.bits.c.valid ||
@@ -231,12 +231,14 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     when (s_release && 
           s_bmRelease && 
           s_pprobe)               { s_acquire    := Bool(true) }
-    when (s_grantack)             { s_bmAcquire  := Bool(true); assert(s_acquire) }
-    when (w_releaseack)           { s_flush      := Bool(true) }
+    when (w_grantlast)            { s_bmAcquire  := Bool(true);  assert(s_acquire)  }
+    when (w_releaseack && 
+          w_bmReleaseack)         { s_flush      := Bool(true) }
     when (w_pprobeackfirst)       { s_probeack   := Bool(true) }
     when (w_grantfirst)           { s_grantack   := Bool(true) }
-    when (w_bmGrantfirst)         { s_bmGrantack := Bool(true) }
-    when (w_pprobeack && w_grant) { s_execute    := Bool(true) }
+    when (w_bmGrantfirst)         { s_bmGrantack := Bool(true);  assert(s_grantack) }
+    when (w_pprobeack && 
+          w_bmGrant)              { s_execute    := Bool(true);  assert(w_grant)    }
     when (no_wait)                { s_writeback  := Bool(true) }
     // when (start_blindmask_request)  { // blindmask "req/schedule" has been accepted by Scheduler
     //                                 s_blindmask     := Bool(true)
@@ -527,6 +529,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
         // Allow wormhole routing for requests whose first beat has offset 0
         w_grant := request.offset === UInt(0) || io.sinkd.bits.last
       } .otherwise {
+        assert(w_grant && w_grantfirst && w_grantlast && s_acquire)
         w_bmGrantfirst := Bool(true)
         w_bmGrantlast := io.sinkd.bits.last
         // Allow wormhole routing for requests whose first beat has offset 0
@@ -544,6 +547,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
       when (!s_bmRelease) { // if we didn't send the bmRelease then this must be for the first release
         w_releaseack := Bool(true)
       } .otherwise {
+        assert(w_releaseack && s_release)
         w_bmReleaseack := Bool(true)
       }
     }
