@@ -116,7 +116,8 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     }
   }
 
-  val blindmask_phase  = RegInit(false.B)
+  // val blockSourceDResp = Wire(Bool())
+  // val blindmask_phase  = RegInit(false.B) // active high (unlike the registers below)
 
   // Completed transitions (s_ = scheduled), (w_ = waiting)
   val s_rprobe         = RegInit(Bool(true)) // B
@@ -138,6 +139,15 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   val s_execute        = RegInit(Bool(true)) // D  w_pprobeack, w_grant
   val w_grantack       = RegInit(Bool(true))
   val s_writeback      = RegInit(Bool(true)) // W  w_*
+  
+  // val s_blindmask      = RegInit(Bool(true))
+  val s_bmAcquire      = RegInit(Bool(true))
+  val w_bmGrantfirst   = RegInit(Bool(true))
+  val w_bmGrantlast    = RegInit(Bool(true))
+  val w_bmGrant        = RegInit(Bool(true))
+  val s_bmGrantack     = RegInit(Bool(true))
+  val s_bmRelease      = RegInit(Bool(true))
+  val w_bmReleaseack   = RegInit(Bool(true))
 
   // [1]: We cannot issue outer Acquire while holding blockB (=> outA can stall)
   // However, inB and outC are higher priority than outB, so s_release and s_pprobe
@@ -166,13 +176,14 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.status.bits.set    := request.set
   io.status.bits.tag    := request.tag
   io.status.bits.way    := meta.way
-  io.status.bits.blindmask_phase := blindmask_phase
-  io.status.bits.blockB := !meta_valid || ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && !w_grantfirst)
-  io.status.bits.nestB  := meta_valid && w_releaseack && w_rprobeacklast && w_pprobeacklast && !w_grantfirst
+  io.status.bits.blindmask_phase := s_bmAcquire && w_grantlast && !w_bmGrantfirst
+  io.status.bits.blockB := !meta_valid || ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && (!w_grantfirst)) || 
+                                          ((!w_bmReleaseack || !w_rprobeacklast || !w_pprobeacklast) && (!w_bmGrantfirst))
+  io.status.bits.nestB  := meta_valid && w_releaseack && w_bmReleaseack && w_rprobeacklast && w_pprobeacklast && (!w_grantfirst || !w_bmGrantfirst)
   // The above rules ensure we will block and not nest an outer probe while still doing our
   // own inner probes. Thus every probe wakes exactly one MSHR.
   io.status.bits.blockC := !meta_valid
-  io.status.bits.nestC  := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst)
+  io.status.bits.nestC  := meta_valid && (!w_rprobeackfirst || !w_pprobeackfirst || !w_grantfirst || !w_bmGrantfirst)
   // The w_grantfirst in nestC is necessary to deal with:
   //   acquire waiting for grant, inner release gets queued, outer probe -> inner probe -> deadlock
   // ... this is possible because the release+probe can be for same set, but different tag
@@ -182,31 +193,54 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   assert (!io.status.bits.nestC || !io.status.bits.blockC)
 
   // Scheduler requests
-  val original_no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_pprobeacklast && w_grantack
-  val no_wait = original_no_wait && !blindmask_phase
-  io.schedule.bits.a.valid := !s_acquire && s_release && s_pprobe
+  // val original_no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_pprobeacklast && w_grantack
+  val no_wait = w_rprobeacklast && w_releaseack && w_grantlast && w_bmGrantlast && w_pprobeacklast && w_grantack
+  // val no_wait = original_no_wait && s_blindmask && !blindmask_phase
+  io.schedule.bits.a.valid := (!s_acquire || (!s_bmAcquire && s_grantack)) && s_release && s_bmRelease && s_pprobe
   io.schedule.bits.b.valid := !s_rprobe || !s_pprobe
-  io.schedule.bits.c.valid := (!s_release && w_rprobeackfirst) || (!s_probeack && w_pprobeackfirst)
-  io.schedule.bits.d.valid := !s_execute && w_pprobeack && w_grant && !blindmask_phase
-  io.schedule.bits.e.valid := !s_grantack && w_grantfirst
+  io.schedule.bits.c.valid := ((!s_release || (!s_bmRelease && w_releaseack)) && w_rprobeackfirst) || (!s_probeack && w_pprobeackfirst)
+  io.schedule.bits.d.valid := !s_execute && w_pprobeack && w_grant && w_bmGrant
+  io.schedule.bits.e.valid := (!s_grantack && w_grantfirst) || (!s_bmGrantack && w_bmGrantfirst)
   io.schedule.bits.x.valid := !s_flush && w_releaseack
-  io.schedule.bits.dir.valid := (!s_release && w_rprobeackfirst) || (!s_writeback && no_wait)
+  io.schedule.bits.dir.valid := ((!s_release || !s_bmRelease) && w_rprobeackfirst) || (!s_writeback && no_wait)
   io.schedule.bits.reload := no_wait
   io.schedule.valid := io.schedule.bits.a.valid || io.schedule.bits.b.valid || io.schedule.bits.c.valid ||
                        io.schedule.bits.d.valid || io.schedule.bits.e.valid || io.schedule.bits.x.valid ||
                        io.schedule.bits.dir.valid
 
+  // val start_blindmask_request = !s_blindmask && original_no_wait
+  // when (blindmask_phase && original_no_wait) {
+  //   blindmask_phase := false.B
+  // }
+
+
+  // when (toggle_blindmask_phase) {
+  //   blindmask_phase := ~blindmask_phase
+  // }
+
+  // when (start_blindmask_request) {
+  //   blockSourceDResp := false.B
+  // }
+
   // Schedule completions
   when (io.schedule.ready) {
                                     s_rprobe     := Bool(true)
     when (w_rprobeackfirst)       { s_release    := Bool(true) }
+    when (w_releaseack)           { s_bmRelease  := Bool(true) }
                                     s_pprobe     := Bool(true)
-    when (s_release && s_pprobe)  { s_acquire    := Bool(true) }
+    when (s_release && 
+          s_bmRelease && 
+          s_pprobe)               { s_acquire    := Bool(true) }
+    when (s_grantack)             { s_bmAcquire  := Bool(true); assert(s_acquire) }
     when (w_releaseack)           { s_flush      := Bool(true) }
     when (w_pprobeackfirst)       { s_probeack   := Bool(true) }
     when (w_grantfirst)           { s_grantack   := Bool(true) }
+    when (w_bmGrantfirst)         { s_bmGrantack := Bool(true) }
     when (w_pprobeack && w_grant) { s_execute    := Bool(true) }
     when (no_wait)                { s_writeback  := Bool(true) }
+    // when (start_blindmask_request)  { // blindmask "req/schedule" has been accepted by Scheduler
+    //                                 s_blindmask     := Bool(true)
+    //                                 blindmask_phase := true.B  } 
     // Await the next operation
     when (no_wait) {
       request_valid := Bool(false)
@@ -286,7 +320,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.a.bits.block   := request.size =/= UInt(log2Ceil(params.cache.blockBytes)) ||
                                      !(request.opcode === PutFullData || request.opcode === AcquirePerm)
   io.schedule.bits.a.bits.source  := UInt(0)
-  io.schedule.bits.a.bits.blindmask_phase := blindmask_phase
+  io.schedule.bits.a.bits.blindmask_phase := s_acquire // if not original acquire then must be bmAcquire
   io.schedule.bits.b.bits.param   := Mux(!s_rprobe, toN, Mux(request.prio(1), request.param, Mux(req_needT, toN, toB)))
   io.schedule.bits.b.bits.tag     := Mux(!s_rprobe, meta.tag, request.tag)
   io.schedule.bits.b.bits.set     := request.set
@@ -298,7 +332,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.c.bits.set     := request.set
   io.schedule.bits.c.bits.way     := meta.way
   io.schedule.bits.c.bits.dirty   := meta.dirty
-  io.schedule.bits.c.bits.blindmask_phase := blindmask_phase
+  io.schedule.bits.c.bits.blindmask_phase := !s_bmRelease && w_releaseack && w_rprobeackfirst
   io.schedule.bits.d.bits         := request
   io.schedule.bits.d.bits.param   := Mux(!req_acquire, request.param,
                                        MuxLookup(request.param, Wire(request.param), Seq(
@@ -487,18 +521,31 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   when (io.sinkd.valid) {
     when (io.sinkd.bits.opcode === Grant || io.sinkd.bits.opcode === GrantData) {
       sink := io.sinkd.bits.sink
-      w_grantfirst := Bool(true)
-      w_grantlast := io.sinkd.bits.last
+      when (!s_bmAcquire) { // if we didn't send the bmAcquire then this must be for the first acquire
+        w_grantfirst := Bool(true)
+        w_grantlast := io.sinkd.bits.last
+        // Allow wormhole routing for requests whose first beat has offset 0
+        w_grant := request.offset === UInt(0) || io.sinkd.bits.last
+      } .otherwise {
+        w_bmGrantfirst := Bool(true)
+        w_bmGrantlast := io.sinkd.bits.last
+        // Allow wormhole routing for requests whose first beat has offset 0
+        w_bmGrant := request.offset === UInt(0) || io.sinkd.bits.last
+      }
+
       // Record if we need to prevent taking ownership
       bad_grant := io.sinkd.bits.denied
-      // Allow wormhole routing for requests whose first beat has offset 0
-      w_grant := request.offset === UInt(0) || io.sinkd.bits.last
+      
       params.ccover(io.sinkd.bits.opcode === GrantData && request.offset === UInt(0), "MSHR_GRANT_WORMHOLE", "Wormhole routing of grant response data")
       params.ccover(io.sinkd.bits.opcode === GrantData && request.offset =/= UInt(0), "MSHR_GRANT_SERIAL", "Sequential routing of grant response data")
       gotT := io.sinkd.bits.param === toT
     }
     .elsewhen (io.sinkd.bits.opcode === ReleaseAck) {
-      w_releaseack := Bool(true)
+      when (!s_bmRelease) { // if we didn't send the bmRelease then this must be for the first release
+        w_releaseack := Bool(true)
+      } .otherwise {
+        w_bmReleaseack := Bool(true)
+      }
     }
   }
   when (io.sinke.valid) {
@@ -512,14 +559,6 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   val new_needT = needT(new_request.opcode, new_request.param)
   val new_clientBit = params.clientBit(new_request.source)
   val new_skipProbe = Mux(skipProbeN(new_request.opcode), new_clientBit, UInt(0))
-  val toggle_blindmask_phase = (io.sinkd.valid && io.sinkd.bits.opcode === ReleaseAck) || // if last cycle in Release operation
-                               (!s_grantack && w_grantfirst)                              // if first cycle of Grant; next cycle will be GrantAck
-  val start_blindmask_request = ((!blindmask_phase && toggle_blindmask_phase) || (blindmask_phase && !toggle_blindmask_phase)) && // xor?
-                                original_no_wait
-
-  when (toggle_blindmask_phase) {
-    blindmask_phase := ~blindmask_phase
-  }
 
   val prior = cacheState(final_meta_writeback, Bool(true))
   def bypass(from: CacheState, cover: Boolean)(implicit sourceInfo: SourceInfo) {
@@ -549,7 +588,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   }
 
   // Create execution plan
-  when (io.directory.valid || (io.allocate.valid && io.allocate.bits.repeat) || start_blindmask_request) {
+  when (io.directory.valid || (io.allocate.valid && io.allocate.bits.repeat)) {
     meta_valid := Bool(true)
     meta := new_meta
     probes_done := UInt(0)
@@ -580,6 +619,14 @@ class MSHR(params: InclusiveCacheParameters) extends Module
     w_grantack       := Bool(true)
     s_writeback      := Bool(true)
 
+    s_bmAcquire      := Bool(true)
+    w_bmGrant        := Bool(true)
+    w_bmGrantfirst   := Bool(true)
+    w_bmGrantlast    := Bool(true)
+    s_bmGrantack     := Bool(true)
+    s_bmRelease      := Bool(true)
+    w_bmReleaseack   := Bool(true)
+
     // For C channel requests (ie: Release[Data])
     when (new_request.prio(2) && Bool(!params.firstLevel)) {
       s_execute := Bool(false)
@@ -604,6 +651,8 @@ class MSHR(params: InclusiveCacheParameters) extends Module
       when (new_meta.hit) {
         s_release := Bool(false)
         w_releaseack := Bool(false)
+        s_bmRelease := Bool(false)
+        w_bmReleaseack := Bool(false)
         // Do we need to shoot-down inner caches?
         when (Bool(!params.firstLevel) && (new_meta.clients =/= UInt(0))) {
           s_rprobe := Bool(false)
@@ -619,6 +668,8 @@ class MSHR(params: InclusiveCacheParameters) extends Module
       when (!new_meta.hit && new_meta.state =/= INVALID) {
         s_release := Bool(false)
         w_releaseack := Bool(false)
+        s_bmRelease := Bool(false)
+        w_bmReleaseack := Bool(false)
         // Do we need to shoot-down inner caches?
         when (Bool(!params.firstLevel) & (new_meta.clients =/= UInt(0))) {
           s_rprobe := Bool(false)
@@ -634,6 +685,12 @@ class MSHR(params: InclusiveCacheParameters) extends Module
         w_grant := Bool(false)
         s_grantack := Bool(false)
         s_writeback := Bool(false)
+
+        s_bmAcquire := Bool(false)
+        w_bmGrantfirst := Bool(false)
+        w_bmGrantlast := Bool(false)
+        w_bmGrant := Bool(false)
+        s_bmGrantack := Bool(false)
       }
       // Do we need a probe?
       when (Bool(!params.firstLevel) && (new_meta.hit &&
