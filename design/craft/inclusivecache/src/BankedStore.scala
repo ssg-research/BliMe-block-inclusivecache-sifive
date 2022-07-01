@@ -130,7 +130,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
     val blindmask_phase = Bool()
   }
 
-  def req[T <: BankedStoreAddress](b: DecoupledIO[T], write: Bool, d: UInt): Request = {
+  def req[T <: BankedStoreAddress](b: DecoupledIO[T], write: Bool, d: UInt, blindmask_phase: Bool): Request = {
     val beatBytes = if (b.bits.inner) innerBytes else outerBytes
     val ports = beatBytes / params.micro.writeBytes
     val bankBits = log2Ceil(numBanks / ports)
@@ -146,7 +146,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
         data
       }
     }
-    val a = Cat(b.bits.way, b.bits.set, b.bits.beat)
+    val a = Cat(b.bits.way, b.bits.set, Mux(blindmask_phase, b.bits.beat, b.bits.beat)) // FIXME: size hack: set blindmask transfer size to cacheBlockBytes and change beat here to beat>>3
     val m = b.bits.mask
     val out = Wire(new Request)
 
@@ -162,6 +162,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
       out.data(i) := w
     }
     out.inner    := b.bits.inner.asBool
+    out.blindmask_phase := blindmask_phase
 
     out
   }
@@ -171,16 +172,11 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   val W = Bool(true)
   val R = Bool(false)
 
-  val sinkC_req    = req(io.sinkC_adr,    W, io.sinkC_dat.data)
-  val sinkD_req    = req(io.sinkD_adr,    W, io.sinkD_dat.data)
-  val sourceC_req  = req(io.sourceC_adr,  R, outerData)
-  val sourceD_rreq = req(io.sourceD_radr, R, innerData)
-  val sourceD_wreq = req(io.sourceD_wadr, W, io.sourceD_wdat.data)
-  sinkC_req.blindmask_phase   := false.B
-  sinkD_req.blindmask_phase   := io.sinkD_adr.bits.blindmask_phase
-  sourceC_req.blindmask_phase := io.sourceC_adr.bits.blindmask_phase
-  sourceD_rreq.blindmask_phase := false.B
-  sourceD_wreq.blindmask_phase := false.B
+  val sinkC_req    = req(io.sinkC_adr,    W, io.sinkC_dat.data    , false.B)
+  val sinkD_req    = req(io.sinkD_adr,    W, io.sinkD_dat.data    , io.sinkD_adr.bits.blindmask_phase)
+  val sourceC_req  = req(io.sourceC_adr,  R, outerData            , io.sourceC_adr.bits.blindmask_phase)
+  val sourceD_rreq = req(io.sourceD_radr, R, innerData            , false.B)
+  val sourceD_wreq = req(io.sourceD_wadr, W, io.sourceD_wdat.data , false.B)
 
   // See the comments above for why this prioritization is used
   val reqs = Seq(sinkC_req, sourceC_req, sinkD_req, sourceD_wreq, sourceD_rreq)

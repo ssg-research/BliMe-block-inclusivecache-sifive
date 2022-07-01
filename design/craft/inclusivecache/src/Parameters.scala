@@ -232,7 +232,9 @@ case class InclusiveCacheParameters(
   }
 
   def expandBlindmaskAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
-    expandAddress(tag, set, offset) // FIXME
+    val orig_addr = expandAddress(tag, set, offset) // FIXME
+    // p(ExtMem).get.master.size
+    orig_addr
   }
 
   def restoreAddress(expanded: UInt): UInt = {
