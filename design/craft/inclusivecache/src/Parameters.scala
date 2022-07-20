@@ -25,6 +25,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.util._
 import freechips.rocketchip.util.property.cover
 import scala.math.{min,max}
+import freechips.rocketchip.subsystem.ExtMem
 
 case class CacheParameters(
   level:       Int,
@@ -227,13 +228,24 @@ case class InclusiveCacheParameters(
     Cat(bits.reverse)
   }
 
+  def withinMainMem(addr: UInt): Bool = {
+    ((addr >= UInt(p(ExtMem).get.master.base)) && (addr < UInt((p(ExtMem).get.master.base + p(ExtMem).get.master.size))))
+  }
+
   def expandDataAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
-    expandAddress(tag, set, offset) // FIXME
+    val orig_addr = expandAddress(tag, set, offset) // FIXME
+    orig_addr
   }
 
   def expandBlindmaskAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
     val orig_addr = expandAddress(tag, set, offset) // FIXME
     // p(ExtMem).get.master.size
+    when (withinMainMem(orig_addr)) {
+      val blindmaskAddr = orig_addr + UInt(p(ExtMem).get.master.size / 2)
+      blindmaskAddr
+    } .otherwise {
+      orig_addr
+    }
     orig_addr
   }
 
