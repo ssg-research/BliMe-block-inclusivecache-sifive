@@ -35,6 +35,32 @@ class Scheduler(params: InclusiveCacheParameters) extends Module
     val resp = Decoupled(new SourceXRequest(params))
   }
 
+  // debugging:
+  /*when (io.in.a.fire) {
+    printf("L2 innerA %x %x \n",
+          io.in.a.bits.address, io.in.a.bits.size)
+  }
+  when (io.in.c.fire) {
+    printf("L2 innerC %x %x \n",
+          io.in.c.bits.address, io.in.c.bits.size)
+  }
+  // when (io.in.d.fire) {
+  //   printf("L2 innerD %x %x \n",
+  //         io.in.d.bits., io.in.d.bits.size)
+  // }
+  when (io.out.a.fire) {
+    printf("L2 outerA %x %x \n",
+          io.out.a.bits.address, io.out.a.bits.size)
+  }
+  when (io.out.c.fire) {
+    printf("L2 outerC %x %x \n",
+          io.out.c.bits.address, io.out.c.bits.size)
+  }
+  // when (io.out.d.fire) {
+  //   printf("L2 outerD %x %x \n",
+  //         io.out.d.bits.address, io.out.d.bits.size)
+  // }*/
+
   val sourceA = Module(new SourceA(params))
   val sourceB = Module(new SourceB(params))
   val sourceC = Module(new SourceC(params))

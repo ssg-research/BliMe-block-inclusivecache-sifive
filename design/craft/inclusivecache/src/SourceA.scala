@@ -20,6 +20,9 @@ package sifive.blocks.inclusivecache
 import Chisel._
 import freechips.rocketchip.tilelink._
 
+// debugging:
+// import freechips.rocketchip.subsystem.ExtMem
+
 class SourceARequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val tag    = UInt(width = params.tagBits)
@@ -54,4 +57,17 @@ class SourceA(params: InclusiveCacheParameters) extends Module
   a.bits.address := Mux(io.req.bits.blindmask_phase, params.expandBlindmaskAddr(io.req.bits.tag, io.req.bits.set, UInt(0)), params.expandDataAddr(io.req.bits.tag, io.req.bits.set, UInt(0)))
   a.bits.mask    := ~UInt(0, width = params.outer.manager.beatBytes)
   a.bits.data    := UInt(0)
+
+  // debugging:
+  /*when (a.fire) {
+    val orig_addr = params.expandAddress(io.req.bits.tag, io.req.bits.set, UInt(0))
+    when (params.withinMainMem(orig_addr)) {
+      val blindmaskAddr = params.expandBlindmaskAddr(io.req.bits.tag, io.req.bits.set, UInt(0))
+      printf("withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
+      printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
+    } .otherwise {
+      printf("withinMainMem false: orig_addr = %x\n", orig_addr)
+      printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
+    }
+  }*/
 }

@@ -239,14 +239,15 @@ case class InclusiveCacheParameters(
 
   def expandBlindmaskAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
     val orig_addr = expandAddress(tag, set, offset) // FIXME
+    val blindmaskAddr = Wire(UInt())
     // p(ExtMem).get.master.size
     when (withinMainMem(orig_addr)) {
-      val blindmaskAddr = orig_addr + UInt(p(ExtMem).get.master.size / 2)
-      blindmaskAddr
+      blindmaskAddr := orig_addr + UInt(p(ExtMem).get.master.size / 2)
     } .otherwise {
-      orig_addr
+      // printf("withinMainMem false: orig_addr = %x\n", orig_addr)
+      blindmaskAddr := orig_addr
     }
-    orig_addr
+    blindmaskAddr
   }
 
   def restoreAddress(expanded: UInt): UInt = {
