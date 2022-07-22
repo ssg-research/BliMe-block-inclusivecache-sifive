@@ -118,4 +118,15 @@ class SourceC(params: InclusiveCacheParameters) extends Module
 
   queue.io.enq <> c
   io.c <> queue.io.deq
+
+  // debugging:
+  /*when (c.fire) {
+    val orig_addr = params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
+    when (params.withinMainMem(orig_addr)) {
+      val blindmaskAddr = params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0))
+      printf("C withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
+    } .otherwise {
+      printf("C withinMainMem false: orig_addr = %x\n", orig_addr)
+    }
+  }*/
 }

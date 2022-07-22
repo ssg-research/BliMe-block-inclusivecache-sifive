@@ -63,10 +63,10 @@ class SourceA(params: InclusiveCacheParameters) extends Module
     val orig_addr = params.expandAddress(io.req.bits.tag, io.req.bits.set, UInt(0))
     when (params.withinMainMem(orig_addr)) {
       val blindmaskAddr = params.expandBlindmaskAddr(io.req.bits.tag, io.req.bits.set, UInt(0))
-      printf("withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
+      printf("A withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
       printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
     } .otherwise {
-      printf("withinMainMem false: orig_addr = %x\n", orig_addr)
+      printf("A withinMainMem false: orig_addr = %x\n", orig_addr)
       printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
     }
   }*/
