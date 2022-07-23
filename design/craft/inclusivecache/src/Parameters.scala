@@ -229,7 +229,11 @@ case class InclusiveCacheParameters(
   }
 
   def withinMainMem(addr: UInt): Bool = {
-    ((addr >= UInt(p(ExtMem).get.master.base)) && (addr < UInt((p(ExtMem).get.master.base + p(ExtMem).get.master.size))))
+    val res = ((addr >= UInt(p(ExtMem).get.master.base)) && (addr < UInt(p(ExtMem).get.master.base + p(ExtMem).get.master.size)))
+    when (res) {
+      assert (addr < UInt(p(ExtMem).get.master.base + p(ExtMem).get.master.size / 2), "Original address "+addr+" in second half of main memory!\n")
+    }
+    res
   }
 
   def expandDataAddr(tag: UInt, set: UInt, offset: UInt): UInt = {

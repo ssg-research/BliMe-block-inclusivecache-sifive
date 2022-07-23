@@ -20,6 +20,8 @@ package sifive.blocks.inclusivecache
 import Chisel._
 import freechips.rocketchip.tilelink._
 
+import freechips.rocketchip.subsystem.ExtMem
+
 class SourceCRequest(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
   val opcode = UInt(width = 3)
@@ -120,13 +122,14 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   io.c <> queue.io.deq
 
   // debugging:
-  /*when (c.fire) {
+  when (c.fire) {
     val orig_addr = params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
     when (params.withinMainMem(orig_addr)) {
       val blindmaskAddr = params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0))
-      printf("C withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
+      printf("  C %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", s3_req.blindmask_phase, c.bits.address, c.bits.size, s3_beat, orig_addr, blindmaskAddr)
     } .otherwise {
-      printf("C withinMainMem false: orig_addr = %x\n", orig_addr)
+      printf("  C withinMainMem false: orig_addr = %x\n", orig_addr)
+      printf("  \tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
     }
-  }*/
+  }
 }
