@@ -126,10 +126,10 @@ class SourceC(params: InclusiveCacheParameters) extends Module
     val orig_addr = params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
     when (params.withinMainMem(orig_addr)) {
       val blindmaskAddr = params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0))
-      printf("  C %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", s3_req.blindmask_phase, c.bits.address, c.bits.size, s3_beat, orig_addr, blindmaskAddr)
+      printf("C %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", s3_req.blindmask_phase, c.bits.address, c.bits.size, s3_beat, orig_addr, blindmaskAddr)
     } .otherwise {
-      printf("  C withinMainMem false: orig_addr = %x\n", orig_addr)
-      printf("  \tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
+      printf("C withinMainMem false: orig_addr = %x\n", orig_addr)
+      printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
     }
   }
 }

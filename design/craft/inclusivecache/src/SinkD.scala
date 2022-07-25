@@ -81,4 +81,9 @@ class SinkD(params: InclusiveCacheParameters) extends Module
   io.bs_dat.data      := d.bits.data(params.outer.bundle.dataBits - 1, 0)
 
   assert (!(d.valid && d.bits.corrupt && !d.bits.denied), "Data poisoning unsupported")
+
+  // debugging:
+  when (io.d.fire) {
+    printf("  D %x %x %x %x\n", io.d.bits.source, io.blindmask_phase, io.d.bits.size, params.outer.count(io.d)._4)
+  }
 }
