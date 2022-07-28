@@ -173,7 +173,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.status.bits.set    := request.set
   io.status.bits.tag    := request.tag
   io.status.bits.way    := meta.way
-  io.status.bits.blindmask_phase := s_bmAcquire && w_grantlast && !w_bmGrantfirst && !w_bmGrantlast
+  io.status.bits.blindmask_phase := s_bmAcquire && w_grantlast && !w_bmGrantlast
   io.status.bits.blockB := !meta_valid || ((!w_releaseack || !w_rprobeacklast || !w_pprobeacklast) && (!w_grantfirst)) || 
                                           ((!w_bmReleaseack || !w_rprobeacklast || !w_pprobeacklast) && (!w_bmGrantfirst))
   io.status.bits.nestB  := meta_valid && w_releaseack && w_bmReleaseack && w_rprobeacklast && w_pprobeacklast && (!w_grantfirst || !w_bmGrantfirst)
