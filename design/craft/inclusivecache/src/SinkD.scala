@@ -83,7 +83,7 @@ class SinkD(params: InclusiveCacheParameters) extends Module
   assert (!(d.valid && d.bits.corrupt && !d.bits.denied), "Data poisoning unsupported")
 
   // debugging:
-  when (io.d.fire) {
-    printf("  D %x %x %x %x\n", io.d.bits.source, io.blindmask_phase, io.d.bits.size, params.outer.count(io.d)._4)
+  when (d.fire) {
+    printf(midas.targetutils.SynthesizePrintf("  D %x %x %x %x %x | %x\n", io.blindmask_phase, d.bits.source, d.bits.opcode, d.bits.size, params.outer.count(d)._4, UInt(params.outer.manager.beatBytes)))
   }
 }

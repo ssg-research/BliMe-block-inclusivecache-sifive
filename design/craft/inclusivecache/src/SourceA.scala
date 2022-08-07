@@ -64,10 +64,10 @@ class SourceA(params: InclusiveCacheParameters) extends Module
     when (params.withinMainMem(orig_addr)) {
       val blindmaskAddr = params.expandBlindmaskAddr(io.req.bits.tag, io.req.bits.set, UInt(0))
       // printf("A withinMainMem true: orig_addr = %x, blindmaskAddr = %x\n", orig_addr, blindmaskAddr)
-      printf("A %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", a.bits.source, io.req.bits.blindmask_phase, a.bits.address, a.bits.size, orig_addr, blindmaskAddr)
+      printf(midas.targetutils.SynthesizePrintf("A %x %x %x %x | orig_addr = %x, blindmaskAddr = %x | %x \n", io.req.bits.blindmask_phase, a.bits.source, a.bits.address, a.bits.size, orig_addr, blindmaskAddr, UInt(params.outer.manager.beatBytes)))
     } .otherwise {
-      printf("A withinMainMem false: orig_addr = %x\n", orig_addr)
-      printf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size))
+      printf(midas.targetutils.SynthesizePrintf("A withinMainMem false: orig_addr = %x\n", orig_addr))
+      printf(midas.targetutils.SynthesizePrintf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size)))
     }
   }
 }
