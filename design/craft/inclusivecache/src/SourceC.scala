@@ -122,14 +122,14 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   io.c <> queue.io.deq
 
   // debugging:
-  when (c.fire) {
-    val orig_addr = params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
-    when (params.withinMainMem(orig_addr)) {
-      val blindmaskAddr = params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0))
-      printf(midas.targetutils.SynthesizePrintf("C %x %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", s3_req.blindmask_phase, c.bits.source, c.bits.address, c.bits.size, s3_beat, orig_addr, blindmaskAddr))
-    } .otherwise {
-      printf(midas.targetutils.SynthesizePrintf("C withinMainMem false: orig_addr = %x\n", orig_addr))
-      printf(midas.targetutils.SynthesizePrintf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size)))
-    }
-  }
+  // when (c.fire) {
+  //   val orig_addr = params.expandAddress(s3_req.tag, s3_req.set, UInt(0))
+  //   when (params.withinMainMem(orig_addr)) {
+  //     val blindmaskAddr = params.expandBlindmaskAddr(s3_req.tag, s3_req.set, UInt(0))
+  //     printf(midas.targetutils.SynthesizePrintf("C %x %x %x %x %x | orig_addr = %x, blindmaskAddr = %x\n", s3_req.blindmask_phase, c.bits.source, c.bits.address, c.bits.size, s3_beat, orig_addr, blindmaskAddr))
+  //   } .otherwise {
+  //     printf(midas.targetutils.SynthesizePrintf("C withinMainMem false: orig_addr = %x\n", orig_addr))
+  //     printf(midas.targetutils.SynthesizePrintf("\tExtMem-base = %x, ExtMem-size = %x\n", UInt(params.p(ExtMem).get.master.base), UInt(params.p(ExtMem).get.master.size)))
+  //   }
+  // }
 }

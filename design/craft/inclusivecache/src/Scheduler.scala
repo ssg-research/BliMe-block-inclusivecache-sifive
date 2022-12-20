@@ -36,14 +36,14 @@ class Scheduler(params: InclusiveCacheParameters) extends Module
   }
 
   // debugging:
-  when (io.in.a.fire) {
-    printf(midas.targetutils.SynthesizePrintf("L2 innerA %x %x | %x\n",
-          io.in.a.bits.address, io.in.a.bits.size, UInt(params.inner.manager.beatBytes)))
-  }
-  when (io.in.c.fire) {
-    printf(midas.targetutils.SynthesizePrintf("L2 innerC %x %x | %x\n",
-          io.in.c.bits.address, io.in.c.bits.size, UInt(params.inner.manager.beatBytes)))
-  }
+  // when (io.in.a.fire) {
+  //   printf(midas.targetutils.SynthesizePrintf("L2 innerA %x %x | %x\n",
+  //         io.in.a.bits.address, io.in.a.bits.size, UInt(params.inner.manager.beatBytes)))
+  // }
+  // when (io.in.c.fire) {
+  //   printf(midas.targetutils.SynthesizePrintf("L2 innerC %x %x | %x\n",
+  //         io.in.c.bits.address, io.in.c.bits.size, UInt(params.inner.manager.beatBytes)))
+  // }
   // when (io.in.d.fire) {
   //   printf("L2 innerD %x %x \n",
   //         io.in.d.bits., io.in.d.bits.size)
