@@ -36,21 +36,21 @@ class Scheduler(params: InclusiveCacheParameters) extends Module
   }
 
   // debugging:
-  when (io.in.a.fire) {
-    printf(midas.targetutils.SynthesizePrintf("L2 innerA %x %x | %x\n",
-          io.in.a.bits.address, io.in.a.bits.size, UInt(params.inner.manager.beatBytes)))
-  }
-  when (io.in.c.fire) {
-    printf(midas.targetutils.SynthesizePrintf("L2 innerC %x %x | %x\n",
-          io.in.c.bits.address, io.in.c.bits.size, UInt(params.inner.manager.beatBytes)))
-  }
+  // when (io.in.a.fire) {
+  //   printf("L2 innerA %x %x %x | %x\n",
+  //         io.in.a.bits.address, io.in.a.bits.source, io.in.a.bits.size, UInt(params.inner.manager.beatBytes))
+  // }
+  // when (io.in.c.fire) {
+  //   printf("L2 innerC %x %x\n",
+  //         io.in.c.bits.address, io.in.c.bits.size)
+  // }
   // when (io.in.d.fire) {
   //   printf("L2 innerD %x %x \n",
-  //         io.in.d.bits., io.in.d.bits.size)
+  //         io.in.d.bits.sink, io.in.d.bits.size)
   // }
   // when (io.out.a.fire) {
-  //   printf("L2 outerA %x %x \n",
-  //         io.out.a.bits.address, io.out.a.bits.size)
+  //   printf("L2 outerA %x %x %x | %x\n",
+  //         io.out.a.bits.address, io.out.a.bits.source, io.out.a.bits.size, UInt(params.outer.manager.beatBytes))
   // }
   // when (io.out.c.fire) {
   //   printf("L2 outerC %x %x \n",
@@ -58,7 +58,7 @@ class Scheduler(params: InclusiveCacheParameters) extends Module
   // }
   // when (io.out.d.fire) {
   //   printf("L2 outerD %x %x \n",
-  //         io.out.d.bits.address, io.out.d.bits.size)
+  //         io.out.d.bits.sink, io.out.d.bits.size)
   // }
 
   val sourceA = Module(new SourceA(params))

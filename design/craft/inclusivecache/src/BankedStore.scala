@@ -168,7 +168,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   }
 
   val innerData = UInt(0, width = innerBytes*9)
-  val outerData = UInt(0, width = outerBytes*9)
+  val outerData = UInt(0, width = outerBytes*8)
   val W = Bool(true)
   val R = Bool(false)
 

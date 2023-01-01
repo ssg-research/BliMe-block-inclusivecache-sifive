@@ -33,7 +33,7 @@ class SinkCResponse(params: InclusiveCacheParameters) extends InclusiveCacheBund
 
 class PutBufferCEntry(params: InclusiveCacheParameters) extends InclusiveCacheBundle(params)
 {
-  val data = UInt(width = params.inner.bundle.dataBits)
+  val data = UInt(width = params.inner.bundle.dataBits + params.inner.bundle.dataBits/8)
   val corrupt = Bool()
 }
 

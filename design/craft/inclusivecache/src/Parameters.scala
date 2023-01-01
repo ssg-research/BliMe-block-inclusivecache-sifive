@@ -228,11 +228,8 @@ case class InclusiveCacheParameters(
     Cat(bits.reverse)
   }
 
-  def withinMainMem(addr: UInt): Bool = {
-    val res = ((addr >= UInt(p(ExtMem).get.master.base)) && (addr < UInt(p(ExtMem).get.master.base + p(ExtMem).get.master.size)))
-    when (res) {
-      assert (addr < UInt(p(ExtMem).get.master.base + p(ExtMem).get.master.size / 2), "Original address "+addr+" in second half of main memory!\n")
-    }
+  def withinFirstHalfOfMainMem(addr: UInt): Bool = {
+    val res = ((addr >= UInt(p(ExtMem).get.master.base)) && (addr < UInt(p(ExtMem).get.master.base + p(ExtMem).get.master.size / 2)))
     res
   }
 
@@ -244,11 +241,9 @@ case class InclusiveCacheParameters(
   def expandBlindmaskAddr(tag: UInt, set: UInt, offset: UInt): UInt = {
     val orig_addr = expandAddress(tag, set, offset) // FIXME
     val blindmaskAddr = Wire(UInt())
-    // p(ExtMem).get.master.size
-    when (withinMainMem(orig_addr)) {
+    when (withinFirstHalfOfMainMem(orig_addr)) {
       blindmaskAddr := orig_addr + UInt(p(ExtMem).get.master.size / 2)
     } .otherwise {
-      // printf("withinMainMem false: orig_addr = %x\n", orig_addr)
       blindmaskAddr := orig_addr
     }
     blindmaskAddr
