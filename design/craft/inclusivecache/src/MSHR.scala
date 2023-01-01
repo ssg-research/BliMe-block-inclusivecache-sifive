@@ -199,7 +199,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.d.valid := !s_execute && w_pprobeack && w_grant && w_bmGrant
   io.schedule.bits.e.valid := (!s_grantack && w_grantfirst) || (!s_bmGrantack && w_bmGrantfirst)
   io.schedule.bits.x.valid := !s_flush && w_releaseack && w_bmReleaseack
-  io.schedule.bits.dir.valid := ((!s_release || !s_bmRelease) && w_rprobeackfirst) || (!s_writeback && no_wait)
+  io.schedule.bits.dir.valid := ((/*!s_release || */(!s_bmRelease && w_releaseack)) && w_rprobeackfirst) || (!s_writeback && no_wait)
   io.schedule.bits.reload := no_wait
   io.schedule.valid := io.schedule.bits.a.valid || io.schedule.bits.b.valid || io.schedule.bits.c.valid ||
                        io.schedule.bits.d.valid || io.schedule.bits.e.valid || io.schedule.bits.x.valid ||
@@ -329,7 +329,7 @@ class MSHR(params: InclusiveCacheParameters) extends Module
   io.schedule.bits.x.bits.fail    := Bool(false)
   io.schedule.bits.dir.bits.set   := request.set
   io.schedule.bits.dir.bits.way   := meta.way
-  io.schedule.bits.dir.bits.data  := Mux(!s_release, invalid, Wire(new DirectoryEntry(params), init = final_meta_writeback))
+  io.schedule.bits.dir.bits.data  := Mux(/*!s_release || */(!s_bmRelease && w_releaseack), invalid, Wire(new DirectoryEntry(params), init = final_meta_writeback))
 
   // Coverage of state transitions
   def cacheState(entry: DirectoryEntry, hit: Bool) = {

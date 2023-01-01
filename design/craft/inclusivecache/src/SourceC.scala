@@ -82,6 +82,7 @@ class SourceC(params: InclusiveCacheParameters) extends Module
   io.bs_adr.bits.set  := req.set
   io.bs_adr.bits.beat := beat
   io.bs_adr.bits.mask := ~UInt(0, width = params.outerMaskBits)
+  io.bs_adr.bits.blindmask_phase := req.blindmask_phase
 
   params.ccover(io.req.valid && io.req.bits.dirty && room && !io.evict_safe, "SOURCEC_HAZARD", "Prevented Eviction data hazard with backpressure")
   params.ccover(io.bs_adr.valid && !io.bs_adr.ready, "SOURCEC_SRAM_STALL", "Data SRAM busy")
