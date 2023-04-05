@@ -21,7 +21,9 @@ import Chisel._
 import freechips.rocketchip.config._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tilelink._
-import freechips.rocketchip.util.{DescribedSRAM, BlindedMem}
+import freechips.rocketchip.util.{DescribedSRAM, BlindedMem, Blinded}
+// import freechips.rocketchip.config.Parameters
+// import freechips.rocketchip.tile.ClTagGranule
 
 import scala.math.{max, min}
 
@@ -81,7 +83,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   val rowEntries = params.cache.sizeBytes / rowBytes
   val rowBits = log2Ceil(rowEntries)
   val numBanks = rowBytes / params.micro.writeBytes
-  val codeBits = 8*params.micro.writeBytes
+  val codeBits = 8*params.micro.writeBytes // = XLen = 64 bits
   require (codeBits % 64 == 0)
 
   val cc_banks = Seq.tabulate(numBanks) {
@@ -99,7 +101,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
         name = s"cc_banks_$i",
         desc = "Banked Store",
         size = rowEntries,
-        data = UInt(width = codeBits/8)
+        data = UInt(width = Blinded.CL_TAG_SIZE)
       )
   }
   // These constraints apply on the port priorities:
@@ -139,9 +141,9 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
 
       if (b.bits.inner) {
         val blindmasks_beat_offset = beatBytes*8
-        val blindmask = d((i + 1) * params.micro.writeBytes - 1 + blindmasks_beat_offset, i * params.micro.writeBytes + blindmasks_beat_offset)
+        val clTag = d((i + 1) * params.micro.writeBytes - 1 + blindmasks_beat_offset, i * params.micro.writeBytes + blindmasks_beat_offset)
 
-        Cat(blindmask, data)
+        Cat(clTag, data)
       } else {
         data
       }
@@ -197,9 +199,9 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
     val inner = PriorityMux(sel, reqs.map(_.inner))
     val blindmask_phase = PriorityMux(sel, reqs.map(_.blindmask_phase))
 
-    val blindedmem_read = Wire(BlindedMem(UInt(),UInt()))
+    val blindedmem_read = Wire(BlindedMem(UInt(codeBits.W), 1))
     blindedmem_read.bits := b_data.read(idx, !wen && en)
-    blindedmem_read.blindmask := b_bmask.read(idx, !wen && en)
+    blindedmem_read.clTags(0) := b_bmask.read(idx, !wen && en)
 
     when (wen && en) {
       when (inner) {
@@ -223,7 +225,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
   }.grouped(outerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
   val decodeC_blindmask = regout.zipWithIndex.map {
-    case (r, i) => Mux(regsel_sourceC(i), r.blindmask, UInt(0))
+    case (r, i) => Mux(regsel_sourceC(i), r.clTags(0), UInt(0))
   }.grouped(outerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
   io.sourceC_dat.data := Mux(delayed_blindmask_phase_C, Cat(decodeC_blindmask.reverse), Cat(decodeC_bits.reverse))
@@ -235,7 +237,7 @@ class BankedStore(params: InclusiveCacheParameters) extends Module
 
   val decodeD_blindmask = regout.zipWithIndex.map {
     // Intentionally not Mux1H and/or an indexed-mux b/c we want it 0 when !sel to save decode power
-    case (r, i) => Mux(regsel_sourceD(i), r.blindmask, UInt(0))
+    case (r, i) => Mux(regsel_sourceD(i), r.clTags(0), UInt(0))
   }.grouped(innerBytes/params.micro.writeBytes).toList.transpose.map(s => s.reduce(_|_))
 
   io.sourceD_rdat.data := Cat(Cat(decodeD_blindmask.reverse), Cat(decodeD_bits.reverse))
